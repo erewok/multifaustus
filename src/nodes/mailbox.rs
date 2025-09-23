@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use crate::messages;
 
+/// Sans-IO mailbox for nodes to send and receive messages.
 #[derive(Clone, Debug)]
 pub struct Mailbox {
     pub inbox: VecDeque<messages::SendableMessage>,

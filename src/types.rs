@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
+use std::time::Duration;
 
 /// A ballot number is a lexicographically ordered pair of an integer
 /// and the identifier of the ballot's leader.
@@ -44,6 +45,26 @@ pub enum CommandType {
     Reconfig(Config),
 }
 
+/// Used by leaders and acceptors to configure timeouts
+/// for various operations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimeoutConfig {
+    // Backoff parameters
+    pub min_timeout: Duration,
+    pub max_timeout: Duration,
+    pub timeout_multiplier: f32,
+    pub timeout_decrease: Duration,
+}
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        TimeoutConfig {
+            min_timeout: Duration::from_millis(100),
+            max_timeout: Duration::from_secs(10),
+            timeout_multiplier: 1.5,
+            timeout_decrease: Duration::from_millis(50),
+        }
+    }
+}
 
 /// A configuration consists of a list of replicas, a list of
 /// acceptors and a list of leaders as well as a mapping of
@@ -54,6 +75,7 @@ pub struct Config {
     pub acceptors: HashSet<AcceptorId>,
     pub leaders: HashSet<LeaderId>,
     pub id_address_map: BTreeMap<NodeId, Address>,
+    pub timeout_config: TimeoutConfig,
 }
 
 impl Config {
@@ -62,12 +84,14 @@ impl Config {
         acceptors: HashSet<AcceptorId>,
         leaders: HashSet<LeaderId>,
         id_address_map: BTreeMap<NodeId, Address>,
+        timeout_config: Option<TimeoutConfig>,
     ) -> Config {
         Config {
             replicas,
             acceptors,
             leaders,
             id_address_map,
+            timeout_config: timeout_config.unwrap_or_default(),
         }
     }
 
@@ -158,7 +182,6 @@ impl Into<NodeId> for LeaderId {
         self.0
     }
 }
-
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd)]
 pub struct ReplicaId(NodeId);
