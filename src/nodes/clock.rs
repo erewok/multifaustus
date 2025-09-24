@@ -121,6 +121,12 @@ pub struct SystemClock {
     timers: BinaryHeap<TimerEvent>,
 }
 
+impl Default for SystemClock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemClock {
     pub fn new() -> Self {
         SystemClock {
@@ -205,6 +211,12 @@ impl SystemClock {
 pub struct MockClock {
     current_time: Instant,
     timers: BinaryHeap<TimerEvent>,
+}
+
+impl Default for MockClock {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockClock {

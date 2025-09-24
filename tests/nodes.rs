@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod tests {
-	use quickcheck::quickcheck;
-	use multifaustus::nodes::replica::Replica;
+    use multifaustus::nodes::replica::Replica;
+    use quickcheck::quickcheck;
 
-	quickcheck! {
-		// Property: For any sequence of decisions, replica never executes the same command twice
-		fn replica_never_executes_command_twice(commands: Vec<u64>) -> bool {
-			// TODO: Setup mock config and transport
-			// TODO: Create Replica, send DecisionMessages for each command
-			// TODO: Track executed commands, ensure no duplicates
-			true // placeholder
-		}
-	}
+    quickcheck! {
+        // Property: For any sequence of decisions, replica never executes the same command twice
+        fn replica_never_executes_command_twice(commands: Vec<u64>) -> bool {
+            // TODO: Setup mock config and transport
+            // TODO: Create Replica, send DecisionMessages for each command
+            // TODO: Track executed commands, ensure no duplicates
+            true // placeholder
+        }
+    }
     #[test]
     fn replica_proposes_and_executes_decision() {
         // Setup replica, leader, acceptor mocks

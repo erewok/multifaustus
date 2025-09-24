@@ -42,6 +42,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}
           just bootstrap
+          just bootstrap-docs
 
       - name: Setup Pages
         id: pages

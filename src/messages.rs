@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::types;
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct SendableMessage {
@@ -46,7 +46,6 @@ impl fmt::Display for SendableMessage {
         }
     }
 }
-
 
 /// Sent by leaders (scouts) to acceptors in Phase 1 of Paxos to initiate a new ballot (prepare).
 #[derive(Clone, Debug)]

@@ -57,7 +57,7 @@ impl Leader {
             .get_address(leader_id.as_ref())
             .ok_or(anyhow::anyhow!("Failed to get address"))?;
         let mut leader = Leader {
-            node_id: leader_id.clone(),
+            node_id: leader_id,
             address: addr.clone(),
             current_timeout: config.timeout_config.min_timeout,
             config,
@@ -78,7 +78,7 @@ impl Leader {
         Ok(leader)
     }
 
-    pub fn accept_message(&mut self, msg: messages::SendableMessage) -> () {
+    pub fn accept_message(&mut self, msg: messages::SendableMessage) {
         self.mailbox.receive(msg);
     }
 
@@ -116,9 +116,10 @@ impl Leader {
         match msg {
             LeaderMessageIn::Propose(propose_msg) => {
                 // Only accept proposal if slot is not already proposed
-                if !self.proposals.contains_key(&propose_msg.slot_number) {
-                    self.proposals
-                        .insert(propose_msg.slot_number, propose_msg.command.clone());
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    self.proposals.entry(propose_msg.slot_number)
+                {
+                    e.insert(propose_msg.command.clone());
 
                     // Only start Phase 2 if leader is active
                     if self.active {
@@ -203,7 +204,7 @@ impl Leader {
                     self.active = false;
                     self.ballot_number = types::BallotNumber {
                         round: preempted_msg.ballot_number.round + 1,
-                        leader: self.node_id.clone(),
+                        leader: self.node_id,
                     };
                     // Schedule a scout retry with backoff instead of immediate retry
                     self.schedule_scout_retry()?;
@@ -253,7 +254,7 @@ impl Leader {
     pub fn send_p1a(&mut self, ballot: types::BallotNumber) -> anyhow::Result<()> {
         for acc in &self.config.acceptors {
             let msg = messages::P1aMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 ballot_number: ballot.clone(),
             };
             let acc_address = self
@@ -279,7 +280,7 @@ impl Leader {
     ) -> anyhow::Result<()> {
         for acc in &self.config.acceptors {
             let msg = messages::P2aMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 ballot_number: ballot.clone(),
                 slot_number: slot,
                 command: command.clone(),
@@ -302,7 +303,7 @@ impl Leader {
     pub fn send_decision(&mut self, slot: u64, command: types::Command) -> anyhow::Result<()> {
         for rep in &self.config.replicas {
             let msg = messages::DecisionMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 slot_number: slot,
                 command: command.clone(),
             };

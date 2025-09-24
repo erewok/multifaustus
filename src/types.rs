@@ -148,9 +148,9 @@ impl AcceptorId {
     }
 }
 
-impl Into<NodeId> for AcceptorId {
-    fn into(self) -> NodeId {
-        self.0
+impl From<AcceptorId> for NodeId {
+    fn from(val: AcceptorId) -> Self {
+        val.0
     }
 }
 
@@ -177,9 +177,9 @@ impl LeaderId {
     }
 }
 
-impl Into<NodeId> for LeaderId {
-    fn into(self) -> NodeId {
-        self.0
+impl From<LeaderId> for NodeId {
+    fn from(val: LeaderId) -> Self {
+        val.0
     }
 }
 
@@ -195,9 +195,9 @@ impl ReplicaId {
     }
 }
 
-impl Into<NodeId> for ReplicaId {
-    fn into(self) -> NodeId {
-        self.0
+impl From<ReplicaId> for NodeId {
+    fn from(val: ReplicaId) -> Self {
+        val.0
     }
 }
 

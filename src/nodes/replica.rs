@@ -63,7 +63,7 @@ impl Replica {
         Ok(())
     }
 
-    pub fn accept_message(&mut self, msg: messages::SendableMessage) -> () {
+    pub fn accept_message(&mut self, msg: messages::SendableMessage) {
         self.mailbox.receive(msg);
     }
 
@@ -123,9 +123,8 @@ impl Replica {
                     if let Some(_proposal) = self.proposals.get(&self.slot_out) {
                         // In any case, we will delete the proposal from self.proposals
                         if Some(_proposal) != self.decisions.get(&self.slot_out) {
-                            self.proposals.remove(&self.slot_out).and_then(|proposal| {
+                            self.proposals.remove(&self.slot_out).map(|proposal| {
                                 self.requests.push(proposal);
-                                Some(())
                             });
                         } else {
                             let _ = self.proposals.remove(&self.slot_out);
@@ -180,7 +179,7 @@ impl Replica {
     pub fn propose(&mut self) -> anyhow::Result<()> {
         let mut new_proposals = Vec::new(); // Track newly created proposals
 
-        while self.requests.len() != 0 && self.slot_in < self.slot_out + WINDOW {
+        while !self.requests.is_empty() && self.slot_in < self.slot_out + WINDOW {
             if !self.decisions.contains_key(&self.slot_in) {
                 let command = self.requests.remove(0);
                 self.proposals.insert(self.slot_in, command.clone());
@@ -255,7 +254,7 @@ impl Replica {
         let mut slots_to_repropose = Vec::new();
 
         // Find slots with proposals but no decisions that have timed out
-        for (&slot, _command) in &self.proposals {
+        for &slot in self.proposals.keys() {
             if !self.decisions.contains_key(&slot) {
                 // This proposal hasn't received a decision yet
                 slots_to_repropose.push(slot);
@@ -320,7 +319,7 @@ impl Replica {
         command: types::Command,
     ) -> anyhow::Result<()> {
         let msg = messages::ProposeMessage {
-            src: self.node_id.clone(),
+            src: self.node_id,
             slot_number: slot,
             command: command.clone(),
         };

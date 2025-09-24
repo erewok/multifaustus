@@ -28,6 +28,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}
           just check
+
       - name: Run tests
         run: |
           cd ${{ github.workspace }}
