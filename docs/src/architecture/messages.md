@@ -59,16 +59,6 @@ Acceptors send P2b messages to confirm they have accepted a specific proposal.
 
 This message informs leaders that a higher-numbered ballot is active, causing them to become inactive.
 
-#### Adopted
-
-**AdoptedMessage**: Sent to leaders when their ballot has been adopted.
-
-- `src`: Sender identifier
-- `ballot_number`: Adopted ballot number
-- `accepted`: List of accepted proposals from this ballot
-
-This message confirms that a leader's ballot is now active and provides any previously accepted proposals.
-
 #### Decision
 
 **DecisionMessage**: Sent by leaders to replicas announcing consensus decisions.

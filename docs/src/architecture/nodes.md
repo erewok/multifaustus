@@ -63,11 +63,11 @@ Leaders coordinate the consensus process by managing the two-phase Paxos protoco
 
 ### Operation Phases
 
-**Scout Phase**: Leader attempts to become active by gathering promises from acceptors.
+**Phase 1 (Prepare)**: Leader sends P1a messages to acceptors and collects P1b responses until reaching quorum. Upon reaching quorum, the leader processes accepted pvalues to resolve conflicts and becomes active.
 
-**Commander Phase**: Active leader proposes specific values for slots and gathers acceptances.
+**Phase 2 (Accept)**: Active leader sends P2a messages for proposals and collects P2b responses. Once quorum is reached for a slot, the leader broadcasts decisions to replicas.
 
-**Decision Phase**: Leader broadcasts decisions once sufficient acceptances are received.
+**Event-Driven Processing**: The leader operates as a single event-driven process, handling messages and timers without separate Scout/Commander sub-processes.
 
 ## Acceptors
 

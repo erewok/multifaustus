@@ -58,24 +58,24 @@ Leaders coordinate the consensus process through ballot management and two-phase
 ```mermaid
 stateDiagram-v2
     [*] --> Inactive
-    Inactive --> ScoutPhase : start_election()
-    ScoutPhase --> CommanderPhase : receive_adopted()
-    ScoutPhase --> Preempted : receive_preempted()
-    CommanderPhase --> Active : sufficient_acceptances()
-    Active --> CommanderPhase : new_proposal()
+    Inactive --> Phase1 : start_election()
+    Phase1 --> Active : p1b_quorum_reached()
+    Phase1 --> Preempted : receive_preempted()
+    Active --> Phase2 : new_proposal()
+    Phase2 --> Active : p2b_quorum_reached()
     Active --> Preempted : higher_ballot_detected()
     Preempted --> Inactive : backoff_complete()
-    Inactive --> ScoutPhase : retry_election()
+    Inactive --> Phase1 : retry_election()
 
-    state ScoutPhase {
+    state Phase1 {
         [*] --> SendingP1a
         SendingP1a --> CollectingP1b
-        CollectingP1b --> EvaluatingPromises
-        EvaluatingPromises --> [*] : majority_achieved
-        EvaluatingPromises --> SendingP1a : insufficient_responses
+        CollectingP1b --> ProcessingPvalues
+        ProcessingPvalues --> [*] : quorum_achieved
+        CollectingP1b --> SendingP1a : timeout_retry
     }
 
-    state CommanderPhase {
+    state Phase2 {
         [*] --> SendingP2a
         SendingP2a --> CollectingP2b
         CollectingP2b --> BroadcastingDecision
@@ -93,20 +93,21 @@ stateDiagram-v2
 
 **Inactive**: Leader is not currently participating in consensus, waiting for election opportunity.
 
-**ScoutPhase**: Leader is attempting to become active by gathering promises from acceptors (Phase 1).
+**Phase1**: Leader is gathering P1b promises from acceptors and processing accepted pvalues to resolve conflicts.
 
-**CommanderPhase**: Leader is proposing specific values and collecting acceptances (Phase 2).
+**Phase2**: Leader is sending P2a proposals for specific slots and collecting P2b acceptances.
 
-**Active**: Leader is successfully coordinating consensus and processing new proposals.
+**Active**: Leader has successfully completed Phase 1, is active, and ready to process new proposals from replicas.
 
 **Preempted**: Leader has been superseded by a higher ballot and must become inactive.
 
 ### Key Transitions
 
-- **Start Election**: Inactive leader begins scout phase with new ballot
-- **Adopted**: Scout phase succeeds, leader becomes active
+- **Start Election**: Inactive leader begins Phase 1 with new ballot
+- **P1b Quorum Reached**: Phase 1 succeeds, leader processes pvalues and becomes active
 - **Preempted**: Higher ballot detected, leader becomes inactive
-- **New Proposal**: Active leader starts commander phase for new slot
+- **New Proposal**: Active leader starts Phase 2 for new slot
+- **P2b Quorum Reached**: Phase 2 succeeds, leader broadcasts decision
 - **Backoff Complete**: Preempted leader waits before retry
 
 ## Acceptor State Machine
@@ -179,9 +180,9 @@ The state machines interact through message exchanges that drive state transitio
 
 **Client-Replica Interaction**: Client requests trigger replica state changes from Idle to Proposing.
 
-**Replica-Leader Coordination**: Replica proposals cause leaders to enter Commander phase from Active state.
+**Replica-Leader Coordination**: Replica proposals cause active leaders to enter Phase 2 for specific slots.
 
-**Leader-Acceptor Protocol**: Leader scout and commander phases drive acceptor state transitions through promise and accept evaluations.
+**Leader-Acceptor Protocol**: Leader Phase 1 and Phase 2 operations drive acceptor state transitions through promise and accept evaluations.
 
 **Failure Detection**: Timeouts in any node can trigger state transitions that initiate recovery procedures.
 
