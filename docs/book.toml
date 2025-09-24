@@ -1,0 +1,33 @@
+[book]
+title = "Multifaustus Documentation"
+description = "Documentation for Multifaustus, a MultiPaxos implementation in Rust inspired by the 'Paxos Made Moderately Complex' paper"
+authors = ["Erik Aker"]
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = true
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/erewok/multifaustus"
+edit-url-template = "https://github.com/erewok/multifaustus/edit/main/docs/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+copy-js = true
