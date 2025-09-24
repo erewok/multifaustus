@@ -15,9 +15,9 @@ I tried to use the role names from "Paxos Made Moderately Comlex":
 - leaders, and
 - acceptors
 
-### Proposers
+### Replicas
 
-Proposers have the following responsibilities:
+Replicas have the following responsibilities:
 
 - Maintains application state
 - Receives requests from clients
@@ -32,12 +32,14 @@ Acceptors have the following responsbilities:
 - Receives requests from replicas
 - Serializes requests and responds to replicas
 
-### Replicas (Learners)
+### Acceptors (Learners)
 
-Replicas have the following responsibilities:
+Acceptors have the following responsibilities:
 
 - Maintains the fault tolerant memory of Paxos
 
 ### State Machine Updates
 
 Each process has an inbox and an outbox (queues) where inbound messages can be added and outbound messages can be staged for delivery.
+
+Each process also has a clock for backoffs.

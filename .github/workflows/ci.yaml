@@ -1,0 +1,42 @@
+name: ci
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "*.rst"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - run: rustup update
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: "bootstrap"
+        run: |
+          cd ${{ github.workspace }}
+          just bootstrap
+      - name: Code quality checks
+        run: |
+          cd ${{ github.workspace }}
+          just check
+
+      - name: Run tests
+        run: |
+          cd ${{ github.workspace }}
+          just test

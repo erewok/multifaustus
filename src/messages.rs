@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::types;
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct SendableMessage {
@@ -21,8 +21,6 @@ pub enum Message {
     P2b(P2bMessage),
     /// Sent by acceptors or other leaders to preempt a leader with a higher ballot.
     Preempted(PreemptedMessage),
-    /// Sent by acceptors to indicate a ballot has been adopted and report accepted proposals.
-    Adopted(AdoptedMessage),
     /// Sent by leaders to replicas to inform them of a chosen command for a slot.
     Decision(DecisionMessage),
     /// Sent by clients to replicas to request execution of a command.
@@ -39,14 +37,12 @@ impl fmt::Display for SendableMessage {
             Message::P2a(_) => write!(f, "P2a from {} => {}", self.src, self.dst),
             Message::P2b(_) => write!(f, "P2b from {} => {}", self.src, self.dst),
             Message::Preempted(_) => write!(f, "Preempted from {} => {}", self.src, self.dst),
-            Message::Adopted(_) => write!(f, "Adopted from {} => {}", self.src, self.dst),
             Message::Decision(_) => write!(f, "Decision from {} => {}", self.src, self.dst),
             Message::Request(_) => write!(f, "Request from {} => {}", self.src, self.dst),
             Message::Propose(_) => write!(f, "Propose from {} => {}", self.src, self.dst),
         }
     }
 }
-
 
 /// Sent by leaders (scouts) to acceptors in Phase 1 of Paxos to initiate a new ballot (prepare).
 #[derive(Clone, Debug)]
@@ -86,14 +82,6 @@ pub struct P2bMessage {
 pub struct PreemptedMessage {
     pub src: types::LeaderId,
     pub ballot_number: types::BallotNumber,
-}
-
-/// Sent by acceptors to indicate a ballot has been adopted and report accepted proposals.
-#[derive(Clone, Debug)]
-pub struct AdoptedMessage {
-    pub src: types::LeaderId,
-    pub ballot_number: types::BallotNumber,
-    pub accepted: Vec<types::PValue>,
 }
 
 /// Sent by leaders to replicas to inform them of a chosen command for a slot.

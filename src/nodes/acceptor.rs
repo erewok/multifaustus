@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::time::Duration;
 
 use tracing::error;
 
@@ -10,7 +9,7 @@ use crate::types;
 
 pub enum AcceptorMessageIn {
     P1a(messages::P1aMessage),
-    P2a(messages::P2aMessage),
+    P2a(Box<messages::P2aMessage>),
 }
 
 pub struct Acceptor {
@@ -46,7 +45,7 @@ impl Acceptor {
         })
     }
 
-    pub fn accept_message(&mut self, msg: messages::SendableMessage) -> () {
+    pub fn accept_message(&mut self, msg: messages::SendableMessage) {
         self.mailbox.receive(msg);
     }
 
@@ -58,7 +57,7 @@ impl Acceptor {
 
         let inbox_received = match received_msg.message {
             messages::Message::P1a(_msg) => AcceptorMessageIn::P1a(_msg),
-            messages::Message::P2a(_msg) => AcceptorMessageIn::P2a(_msg),
+            messages::Message::P2a(_msg) => AcceptorMessageIn::P2a(Box::new(_msg)),
             msg => {
                 error!(
                     "{}: Leader received unexpected message in mailbox: {:?}",
@@ -83,7 +82,7 @@ impl Acceptor {
                 let ballot_number = p1a_msg.ballot_number.clone();
                 let mut accepted = Vec::new();
                 // Collect all accepted proposals for this ballot
-                for (&slot, &(ref accepted_ballot, ref command)) in &self.accepted {
+                for (&slot, (accepted_ballot, command)) in &self.accepted {
                     if accepted_ballot == &ballot_number {
                         accepted.push(types::PValue {
                             ballot_number: accepted_ballot.clone(),
@@ -100,7 +99,7 @@ impl Acceptor {
                     .unwrap_or_else(|| types::BallotNumber::new(p1a_msg.src));
                 if ballot_number >= promised_ballot {
                     self.promised.insert(0, ballot_number.clone()); // Update global promised
-                    self.send_p1b(p1a_msg.src.clone(), ballot_number, accepted)?;
+                    self.send_p1b(p1a_msg.src, ballot_number, accepted)?;
                 }
             }
             AcceptorMessageIn::P2a(p2a_msg) => {
@@ -116,7 +115,7 @@ impl Acceptor {
                     self.promised.insert(slot, ballot.clone());
                     self.accepted
                         .insert(slot, (ballot.clone(), p2a_msg.command.clone()));
-                    self.send_p2b(p2a_msg.src.clone(), ballot, slot)?;
+                    self.send_p2b(p2a_msg.src, ballot, slot)?;
                 }
             }
         }
@@ -131,7 +130,7 @@ impl Acceptor {
         accepted: Vec<types::PValue>,
     ) -> anyhow::Result<()> {
         let msg = messages::P1bMessage {
-            src: self.node_id.clone(),
+            src: self.node_id,
             ballot_number: ballot,
             accepted,
         };
@@ -156,7 +155,7 @@ impl Acceptor {
         slot: u64,
     ) -> anyhow::Result<()> {
         let msg = messages::P2bMessage {
-            src: self.node_id.clone(),
+            src: self.node_id,
             ballot_number: ballot,
             slot_number: slot,
         };

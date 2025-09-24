@@ -9,11 +9,10 @@ use crate::nodes::mailbox::Mailbox;
 use crate::types;
 
 pub enum LeaderMessageIn {
-    Propose(messages::ProposeMessage),
+    Propose(Box<messages::ProposeMessage>),
     P1b(messages::P1bMessage),
     P2b(messages::P2bMessage),
     Preempted(messages::PreemptedMessage),
-    Adopted(messages::AdoptedMessage),
 }
 
 pub enum LeaderScheduledAction {
@@ -23,7 +22,7 @@ pub enum LeaderScheduledAction {
 }
 
 pub enum LeaderEvent {
-    Message(messages::SendableMessage),
+    Message(Box<messages::SendableMessage>),
     Timer(LeaderScheduledAction),
     Tick, // Regular check for timeouts
 }
@@ -37,8 +36,8 @@ pub struct Leader {
     // Ballot number, proposals, promises, etc.
     ballot_number: types::BallotNumber,
     proposals: HashMap<u64, types::Command>,
-    // We probably need only AcceptorID HashSets instead of the full message here
-    p1b_responses: HashMap<types::BallotNumber, HashSet<types::AcceptorId>>,
+    // Store full P1b messages to process accepted pvalues for conflict resolution
+    p1b_responses: HashMap<types::BallotNumber, Vec<messages::P1bMessage>>,
     p2b_responses: HashMap<u64, HashSet<types::AcceptorId>>,
     // Clock provider for scheduling timeouts and retries
     clock: Box<dyn ClockProvider + Send>,
@@ -57,7 +56,7 @@ impl Leader {
             .get_address(leader_id.as_ref())
             .ok_or(anyhow::anyhow!("Failed to get address"))?;
         let mut leader = Leader {
-            node_id: leader_id.clone(),
+            node_id: leader_id,
             address: addr.clone(),
             current_timeout: config.timeout_config.min_timeout,
             config,
@@ -78,7 +77,7 @@ impl Leader {
         Ok(leader)
     }
 
-    pub fn accept_message(&mut self, msg: messages::SendableMessage) -> () {
+    pub fn accept_message(&mut self, msg: messages::SendableMessage) {
         self.mailbox.receive(msg);
     }
 
@@ -89,11 +88,10 @@ impl Leader {
         };
 
         let inbox_received = match received_msg.message {
-            messages::Message::Propose(_msg) => LeaderMessageIn::Propose(_msg),
+            messages::Message::Propose(_msg) => LeaderMessageIn::Propose(Box::new(_msg)),
             messages::Message::P1b(_msg) => LeaderMessageIn::P1b(_msg),
             messages::Message::P2b(_msg) => LeaderMessageIn::P2b(_msg),
             messages::Message::Preempted(_msg) => LeaderMessageIn::Preempted(_msg),
-            messages::Message::Adopted(_msg) => LeaderMessageIn::Adopted(_msg),
             msg => {
                 error!(
                     "{}: Leader received unexpected message in mailbox: {:?}",
@@ -116,9 +114,10 @@ impl Leader {
         match msg {
             LeaderMessageIn::Propose(propose_msg) => {
                 // Only accept proposal if slot is not already proposed
-                if !self.proposals.contains_key(&propose_msg.slot_number) {
-                    self.proposals
-                        .insert(propose_msg.slot_number, propose_msg.command.clone());
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    self.proposals.entry(propose_msg.slot_number)
+                {
+                    e.insert(propose_msg.command.clone());
 
                     // Only start Phase 2 if leader is active
                     if self.active {
@@ -133,31 +132,46 @@ impl Leader {
             LeaderMessageIn::P1b(p1b_msg) => {
                 // Collect P1b responses for the ballot
                 let ballot = p1b_msg.ballot_number.clone();
-                // HashSet solves for: we may end up pushing the same message multiple times if the same acceptor responds again
-                self.p1b_responses
-                    .entry(ballot.clone())
-                    .and_modify(|r| {
-                        r.insert(p1b_msg.src);
-                    })
-                    .or_insert_with(|| {
-                        let mut m = HashSet::new();
-                        m.insert(p1b_msg.src);
-                        m
-                    });
-                // If quorum reached, start Phase 2 for all proposals
-                if self
-                    .p1b_responses
-                    .get(&ballot)
-                    .map(|v| v.len())
-                    .unwrap_or_default()
-                    >= quorum
-                {
+                let src = p1b_msg.src;
+
+                // Store full P1b messages to process accepted pvalues
+                let should_process = {
+                    let responses = self.p1b_responses.entry(ballot.clone()).or_default();
+
+                    // Only add if we haven't seen this acceptor for this ballot yet
+                    if !responses.iter().any(|msg| msg.src == src) {
+                        responses.push(p1b_msg);
+                    }
+
+                    // Check if we have enough responses for quorum
+                    responses.len() >= quorum
+                };
+
+                // If quorum reached, process pvalues and start Phase 2
+                if should_process {
                     // Reset timeout on successful Phase 1
                     self.reset_timeout();
                     // Cancel any pending scout retries since we succeeded
                     self.clock.cancel(&ClockAction::SendScout {
                         ballot: self.ballot_number.clone(),
                     });
+
+                    // Process accepted pvalues to resolve conflicts for highest ballot per slot
+                    let mut pmax: HashMap<u64, types::BallotNumber> = HashMap::new();
+
+                    if let Some(responses) = self.p1b_responses.get(&ballot) {
+                        for p1b_msg in responses {
+                            for pvalue in &p1b_msg.accepted {
+                                let slot = pvalue.slot;
+                                if !pmax.contains_key(&slot) || pmax[&slot] < pvalue.ballot_number {
+                                    pmax.insert(slot, pvalue.ballot_number.clone());
+                                    self.proposals.insert(slot, pvalue.command.clone());
+                                }
+                            }
+                        }
+                    }
+
+                    // Start Phase 2 for all proposals
                     let proposals: Vec<(u64, types::Command)> = self
                         .proposals
                         .iter()
@@ -166,8 +180,9 @@ impl Leader {
                     for (slot, command) in proposals {
                         self.send_p2a(ballot.clone(), slot, command)?;
                     }
-                    // Maybe clear responses to avoid duplicate sends
-                    // self.p1b_responses.remove(&ballot);
+
+                    // Set the leader as active after successful Phase 1
+                    self.active = true;
                 }
             }
             LeaderMessageIn::P2b(p2b_msg) => {
@@ -203,46 +218,10 @@ impl Leader {
                     self.active = false;
                     self.ballot_number = types::BallotNumber {
                         round: preempted_msg.ballot_number.round + 1,
-                        leader: self.node_id.clone(),
+                        leader: self.node_id,
                     };
                     // Schedule a scout retry with backoff instead of immediate retry
                     self.schedule_scout_retry()?;
-                }
-            }
-            LeaderMessageIn::Adopted(adopted_msg) => {
-                // Only process if this is for our current ballot
-                if self.ballot_number == adopted_msg.ballot_number {
-                    // Reset timeout on successful adoption
-                    self.reset_timeout();
-                    // Cancel any pending scout retries
-                    self.clock.cancel(&ClockAction::SendScout {
-                        ballot: self.ballot_number.clone(),
-                    });
-                    // Merge accepted proposals into self.proposals
-                    // For every slot number, add the proposal with the highest ballot number
-                    let mut pmax: HashMap<u64, types::BallotNumber> = HashMap::new();
-
-                    for pvalue in &adopted_msg.accepted {
-                        let slot = pvalue.slot;
-                        if !pmax.contains_key(&slot) || pmax[&slot] < pvalue.ballot_number {
-                            pmax.insert(slot, pvalue.ballot_number.clone());
-                            self.proposals.insert(slot, pvalue.command.clone());
-                        }
-                    }
-
-                    // Start a commander (Phase 2) for every proposal
-                    let proposals: Vec<(u64, types::Command)> = self
-                        .proposals
-                        .iter()
-                        .map(|(&slot, command)| (slot, command.clone()))
-                        .collect();
-
-                    for (slot, command) in proposals {
-                        self.send_p2a(self.ballot_number.clone(), slot, command)?;
-                    }
-
-                    // Set the leader as active
-                    self.active = true;
                 }
             }
         }
@@ -253,7 +232,7 @@ impl Leader {
     pub fn send_p1a(&mut self, ballot: types::BallotNumber) -> anyhow::Result<()> {
         for acc in &self.config.acceptors {
             let msg = messages::P1aMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 ballot_number: ballot.clone(),
             };
             let acc_address = self
@@ -279,7 +258,7 @@ impl Leader {
     ) -> anyhow::Result<()> {
         for acc in &self.config.acceptors {
             let msg = messages::P2aMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 ballot_number: ballot.clone(),
                 slot_number: slot,
                 command: command.clone(),
@@ -302,7 +281,7 @@ impl Leader {
     pub fn send_decision(&mut self, slot: u64, command: types::Command) -> anyhow::Result<()> {
         for rep in &self.config.replicas {
             let msg = messages::DecisionMessage {
-                src: self.node_id.clone(),
+                src: self.node_id,
                 slot_number: slot,
                 command: command.clone(),
             };
@@ -540,7 +519,7 @@ mod tests {
     // Add more tests for preemption, ballot adoption, etc.
 
     #[test]
-    fn leader_handles_adopted_message_correctly() {
+    fn leader_handles_p1b_pvalue_conflict_resolution() {
         let mut leader = setup();
 
         // Initially, leader should not be active
@@ -587,16 +566,20 @@ mod tests {
         // Clear outbox first (constructor sends P1a)
         leader.mailbox.clear_outbox();
 
-        // Send adopted message with mixed pvalues
-        let adopted_msg = messages::AdoptedMessage {
-            src: leader.node_id.clone(),
+        // Send P1b messages with mixed pvalues to reach quorum
+        let p1b_msg1 = messages::P1bMessage {
+            src: AcceptorId::new(1),
             ballot_number: leader.ballot_number.clone(),
-            accepted: vec![pvalue1_old, pvalue1_new, pvalue2],
+            accepted: vec![pvalue1_old, pvalue2.clone()],
+        };
+        let p1b_msg2 = messages::P1bMessage {
+            src: AcceptorId::new(2),
+            ballot_number: leader.ballot_number.clone(),
+            accepted: vec![pvalue1_new],
         };
 
-        leader
-            .handle_msg(LeaderMessageIn::Adopted(adopted_msg))
-            .unwrap();
+        leader.handle_msg(LeaderMessageIn::P1b(p1b_msg1)).unwrap();
+        leader.handle_msg(LeaderMessageIn::P1b(p1b_msg2)).unwrap();
 
         // Leader should now be active
         assert!(leader.active);
@@ -631,62 +614,6 @@ mod tests {
 
         assert!(p2a_slots.contains(&1));
         assert!(p2a_slots.contains(&2));
-    }
-
-    #[test]
-    fn leader_ignores_adopted_message_for_wrong_ballot() {
-        let mut leader = setup();
-
-        // Initially, leader should not be active
-        assert!(!leader.active);
-
-        // Create a different ballot number
-        let wrong_ballot = BallotNumber {
-            round: leader.ballot_number.round + 1,
-            leader: LeaderId::new(2),
-        };
-
-        let command = Command {
-            client_id: leader.node_id.as_ref().clone(),
-            request_id: 1,
-            op: CommandType::Op(vec![1, 2, 3]),
-        };
-
-        let pvalue = PValue {
-            ballot_number: wrong_ballot.clone(),
-            slot: 1,
-            command: command.clone(),
-        };
-
-        // Clear outbox first (constructor sends P1a)
-        leader.mailbox.clear_outbox();
-
-        // Send adopted message with wrong ballot
-        let adopted_msg = messages::AdoptedMessage {
-            src: leader.node_id.clone(),
-            ballot_number: wrong_ballot,
-            accepted: vec![pvalue],
-        };
-
-        leader
-            .handle_msg(LeaderMessageIn::Adopted(adopted_msg))
-            .unwrap();
-
-        // Leader should still not be active
-        assert!(!leader.active);
-
-        // Leader should not have adopted any proposals
-        assert!(leader.proposals.is_empty());
-
-        // No P2a messages should have been sent
-        let p2a_count = leader
-            .mailbox
-            .outbox
-            .iter()
-            .filter(|msg| matches!(msg.message, Message::P2a(_)))
-            .count();
-
-        assert_eq!(p2a_count, 0);
     }
 
     #[test]
@@ -768,10 +695,10 @@ mod tests {
     }
 
     #[test]
-    fn leader_cancels_scout_retry_on_successful_adoption() {
+    fn leader_cancels_scout_retry_on_successful_p1b_quorum() {
         let mut leader = setup();
 
-        // Create an adopted message
+        // Create a command
         let command = Command {
             client_id: leader.node_id.as_ref().clone(),
             request_id: 1,
@@ -784,16 +711,21 @@ mod tests {
             command: command.clone(),
         };
 
-        let adopted_msg = messages::AdoptedMessage {
-            src: leader.node_id.clone(),
+        // Send P1b messages to reach quorum
+        let p1b_msg1 = messages::P1bMessage {
+            src: AcceptorId::new(1),
             ballot_number: leader.ballot_number.clone(),
             accepted: vec![pvalue],
         };
+        let p1b_msg2 = messages::P1bMessage {
+            src: AcceptorId::new(2),
+            ballot_number: leader.ballot_number.clone(),
+            accepted: vec![],
+        };
 
-        // Handle adoption
-        leader
-            .handle_msg(LeaderMessageIn::Adopted(adopted_msg))
-            .unwrap();
+        // Handle P1b messages
+        leader.handle_msg(LeaderMessageIn::P1b(p1b_msg1)).unwrap();
+        leader.handle_msg(LeaderMessageIn::P1b(p1b_msg2)).unwrap();
 
         // Leader should be active now
         assert!(leader.active);

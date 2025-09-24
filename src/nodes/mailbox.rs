@@ -9,6 +9,12 @@ pub struct Mailbox {
     pub outbox: VecDeque<messages::SendableMessage>,
 }
 
+impl Default for Mailbox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Mailbox {
     pub fn new() -> Self {
         Mailbox {

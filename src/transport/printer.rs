@@ -3,7 +3,6 @@ use tracing::info;
 use crate::messages;
 use crate::transport::Transport;
 
-
 pub struct Printer;
 
 impl Transport for Printer {

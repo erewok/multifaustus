@@ -54,7 +54,7 @@ pub enum ClockAction {
 /// Events that can be processed by nodes.
 #[derive(Debug)]
 pub enum ClockEvent {
-    Message(messages::SendableMessage),
+    Message(Box<messages::SendableMessage>),
     Timer(ClockAction),
     Tick, // Regular check for timeouts
 }
@@ -119,6 +119,12 @@ impl Clock {
 #[derive(Debug)]
 pub struct SystemClock {
     timers: BinaryHeap<TimerEvent>,
+}
+
+impl Default for SystemClock {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SystemClock {
@@ -205,6 +211,12 @@ impl SystemClock {
 pub struct MockClock {
     current_time: Instant,
     timers: BinaryHeap<TimerEvent>,
+}
+
+impl Default for MockClock {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockClock {
