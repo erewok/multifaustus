@@ -1,0 +1,34 @@
+name: ci
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "*.rst"
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - run: rustup update
+      - uses: actions/checkout@v4
+
+      - name: "bootstrap"
+        run: |
+          cd ${{ github.workspace }}
+          just bootstrap
+      - name: Code quality checks
+        run: |
+          cd ${{ github.workspace }}
+          just check
+      - name: Run tests
+        run: |
+          cd ${{ github.workspace }}
+          just test
