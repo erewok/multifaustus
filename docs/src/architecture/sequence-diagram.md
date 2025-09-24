@@ -270,5 +270,3 @@ sequenceDiagram
 - Each slot requires independent majority agreement
 - Commands are executed in slot order regardless of decision timing
 - Parallelization improves system throughput
-
-These sequence diagrams demonstrate the sophisticated coordination required for distributed consensus while highlighting the system's ability to handle various operational scenarios and failure conditions.
