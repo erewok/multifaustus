@@ -9,7 +9,7 @@ use crate::types;
 
 pub enum AcceptorMessageIn {
     P1a(messages::P1aMessage),
-    P2a(messages::P2aMessage),
+    P2a(Box<messages::P2aMessage>),
 }
 
 pub struct Acceptor {
@@ -57,7 +57,7 @@ impl Acceptor {
 
         let inbox_received = match received_msg.message {
             messages::Message::P1a(_msg) => AcceptorMessageIn::P1a(_msg),
-            messages::Message::P2a(_msg) => AcceptorMessageIn::P2a(_msg),
+            messages::Message::P2a(_msg) => AcceptorMessageIn::P2a(Box::new(_msg)),
             msg => {
                 error!(
                     "{}: Leader received unexpected message in mailbox: {:?}",

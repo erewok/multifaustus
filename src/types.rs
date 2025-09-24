@@ -143,7 +143,9 @@ impl AcceptorId {
     pub fn new(id: u64) -> AcceptorId {
         AcceptorId(NodeId::new(id))
     }
-    pub fn as_ref(&self) -> &NodeId {
+}
+impl std::convert::AsRef<NodeId> for AcceptorId {
+    fn as_ref(&self) -> &NodeId {
         &self.0
     }
 }
@@ -172,7 +174,9 @@ impl LeaderId {
     pub fn new(id: u64) -> LeaderId {
         LeaderId(NodeId::new(id))
     }
-    pub fn as_ref(&self) -> &NodeId {
+}
+impl std::convert::AsRef<NodeId> for LeaderId {
+    fn as_ref(&self) -> &NodeId {
         &self.0
     }
 }
@@ -190,7 +194,9 @@ impl ReplicaId {
     pub fn new(id: u64) -> ReplicaId {
         ReplicaId(NodeId::new(id))
     }
-    pub fn as_ref(&self) -> &NodeId {
+}
+impl std::convert::AsRef<NodeId> for ReplicaId {
+    fn as_ref(&self) -> &NodeId {
         &self.0
     }
 }

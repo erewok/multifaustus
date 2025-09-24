@@ -54,7 +54,7 @@ pub enum ClockAction {
 /// Events that can be processed by nodes.
 #[derive(Debug)]
 pub enum ClockEvent {
-    Message(messages::SendableMessage),
+    Message(Box<messages::SendableMessage>),
     Timer(ClockAction),
     Tick, // Regular check for timeouts
 }

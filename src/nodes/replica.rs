@@ -122,10 +122,8 @@ impl Replica {
                 while self.decisions.contains_key(&self.slot_out) {
                     if let Some(_proposal) = self.proposals.get(&self.slot_out) {
                         // In any case, we will delete the proposal from self.proposals
-                        if Some(_proposal) != self.decisions.get(&self.slot_out) {
-                            self.proposals.remove(&self.slot_out).map(|proposal| {
-                                self.requests.push(proposal);
-                            });
+                        if let Some(proposal) = self.proposals.remove(&self.slot_out) {
+                            self.requests.push(proposal);
                         } else {
                             let _ = self.proposals.remove(&self.slot_out);
                         }
